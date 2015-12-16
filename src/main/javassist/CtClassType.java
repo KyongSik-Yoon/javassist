@@ -192,7 +192,24 @@ class CtClassType extends CtClass {
         try {
             fin = classPool.openClassfile(getName());
             if (fin == null)
-                throw new NotFoundException(getName());
+            {
+                CtClass tmp = classPool.makeClass(getName());
+
+                if (tmp == null)
+                {
+                    throw new NotFoundException(getName());
+                }
+                else
+                {
+                    try
+                    {
+                        fin = new ByteArrayInputStream(tmp.toBytecode());
+                    }
+                    catch (CannotCompileException e)
+                    {
+                    }
+                }
+            }
 
             fin = new BufferedInputStream(fin);
             ClassFile cf = new ClassFile(new DataInputStream(fin));
