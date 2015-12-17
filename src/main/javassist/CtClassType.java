@@ -14,7 +14,7 @@
  * License.
  */
 
-package javassist;
+package javassist.jennifer;
 
 import java.lang.ref.WeakReference;
 import java.io.BufferedInputStream;
@@ -31,28 +31,28 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Set;
 
-import javassist.bytecode.AccessFlag;
-import javassist.bytecode.AttributeInfo;
-import javassist.bytecode.AnnotationsAttribute;
-import javassist.bytecode.BadBytecode;
-import javassist.bytecode.Bytecode;
-import javassist.bytecode.ClassFile;
-import javassist.bytecode.CodeAttribute;
-import javassist.bytecode.ConstantAttribute;
-import javassist.bytecode.CodeIterator;
-import javassist.bytecode.ConstPool;
-import javassist.bytecode.Descriptor;
-import javassist.bytecode.EnclosingMethodAttribute;
-import javassist.bytecode.FieldInfo;
-import javassist.bytecode.InnerClassesAttribute;
-import javassist.bytecode.MethodInfo;
-import javassist.bytecode.ParameterAnnotationsAttribute;
-import javassist.bytecode.SignatureAttribute;
-import javassist.bytecode.annotation.Annotation;
-import javassist.compiler.AccessorMaker;
-import javassist.compiler.CompileError;
-import javassist.compiler.Javac;
-import javassist.expr.ExprEditor;
+import javassist.jennifer.bytecode.AccessFlag;
+import javassist.jennifer.bytecode.AttributeInfo;
+import javassist.jennifer.bytecode.AnnotationsAttribute;
+import javassist.jennifer.bytecode.BadBytecode;
+import javassist.jennifer.bytecode.Bytecode;
+import javassist.jennifer.bytecode.ClassFile;
+import javassist.jennifer.bytecode.CodeAttribute;
+import javassist.jennifer.bytecode.ConstantAttribute;
+import javassist.jennifer.bytecode.CodeIterator;
+import javassist.jennifer.bytecode.ConstPool;
+import javassist.jennifer.bytecode.Descriptor;
+import javassist.jennifer.bytecode.EnclosingMethodAttribute;
+import javassist.jennifer.bytecode.FieldInfo;
+import javassist.jennifer.bytecode.InnerClassesAttribute;
+import javassist.jennifer.bytecode.MethodInfo;
+import javassist.jennifer.bytecode.ParameterAnnotationsAttribute;
+import javassist.jennifer.bytecode.SignatureAttribute;
+import javassist.jennifer.bytecode.annotation.Annotation;
+import javassist.jennifer.compiler.AccessorMaker;
+import javassist.jennifer.compiler.CompileError;
+import javassist.jennifer.compiler.Javac;
+import javassist.jennifer.expr.ExprEditor;
 
 /**
  * Class types.
@@ -192,7 +192,24 @@ class CtClassType extends CtClass {
         try {
             fin = classPool.openClassfile(getName());
             if (fin == null)
-                throw new NotFoundException(getName());
+            {
+                CtClass tmp = classPool.makeClass(getName());
+
+                if (tmp == null)
+                {
+                    throw new NotFoundException(getName());
+                }
+                else
+                {
+                    try
+                    {
+                        fin = new ByteArrayInputStream(tmp.toBytecode());
+                    }
+                    catch (CannotCompileException e)
+                    {
+                    }
+                }
+            }
 
             fin = new BufferedInputStream(fin);
             ClassFile cf = new ClassFile(new DataInputStream(fin));
@@ -221,7 +238,7 @@ class CtClassType extends CtClass {
 
    /* Inherited from CtClass.  Called by get() in ClassPool.
     *
-    * @see javassist.CtClass#incGetCounter()
+    * @see javassist.jennifer.CtClass#incGetCounter()
     * @see #toBytecode(DataOutputStream)
     */
    final void incGetCounter() { ++getCount; }
@@ -451,29 +468,17 @@ class CtClassType extends CtClass {
         cf.setAccessFlags(AccessFlag.of(mod));
     }
 
-    //@Override
-    public boolean hasAnnotation(String annotationName) {
+    public boolean hasAnnotation(Class clz) {
         ClassFile cf = getClassFile2();
         AnnotationsAttribute ainfo = (AnnotationsAttribute)
-                cf.getAttribute(AnnotationsAttribute.invisibleTag);
+                cf.getAttribute(AnnotationsAttribute.invisibleTag);  
         AnnotationsAttribute ainfo2 = (AnnotationsAttribute)
-                cf.getAttribute(AnnotationsAttribute.visibleTag);
-        return hasAnnotationType(annotationName, getClassPool(), ainfo, ainfo2);
+                cf.getAttribute(AnnotationsAttribute.visibleTag);  
+        return hasAnnotationType(clz, getClassPool(), ainfo, ainfo2);
     }
 
-    /**
-     * @deprecated
-     */
     static boolean hasAnnotationType(Class clz, ClassPool cp,
-                                     AnnotationsAttribute a1,
-                                     AnnotationsAttribute a2)
-    {
-        return hasAnnotationType(clz.getName(), cp, a1, a2);
-    }
-
-    static boolean hasAnnotationType(String annotationTypeName, ClassPool cp,
-                                     AnnotationsAttribute a1,
-                                     AnnotationsAttribute a2)
+                                     AnnotationsAttribute a1, AnnotationsAttribute a2)
     {
         Annotation[] anno1, anno2;
 
@@ -487,15 +492,16 @@ class CtClassType extends CtClass {
         else
             anno2 = a2.getAnnotations();
 
+        String typeName = clz.getName();
         if (anno1 != null)
-            for (int i = 0; i < anno1.length; i++)
-                if (anno1[i].getTypeName().equals(annotationTypeName))
-                    return true;
+           for (int i = 0; i < anno1.length; i++)
+              if (anno1[i].getTypeName().equals(typeName))
+                  return true;
 
         if (anno2 != null)
-            for (int i = 0; i < anno2.length; i++)
-                if (anno2[i].getTypeName().equals(annotationTypeName))
-                    return true;
+           for (int i = 0; i < anno2.length; i++)
+              if (anno2[i].getTypeName().equals(typeName))
+                  return true;
 
         return false;
     }
@@ -699,7 +705,7 @@ class CtClassType extends CtClass {
             catch (ClassNotFoundException e2){
                 try {
                     Class clazz = cp.get(anno.getTypeName()).toClass();
-                    return javassist.bytecode.annotation.AnnotationImpl.make(
+                    return javassist.jennifer.bytecode.annotation.AnnotationImpl.make(
                                             clazz.getClassLoader(),
                                             clazz, cp, anno);
                 }
@@ -733,7 +739,24 @@ class CtClassType extends CtClass {
         if (supername == null)
             return null;
         else
-            return classPool.get(supername);
+        {
+            try
+            {
+                return classPool.get(supername);
+            }
+            catch (NotFoundException notFoundException)
+            {
+                CtClass superClass = classPool.makeClass(supername);
+                if (superClass == null)
+                {
+                    throw notFoundException;
+                }
+                else
+                {
+                    return superClass;
+                }
+            }
+        }
     }
 
     public void setSuperclass(CtClass clazz) throws CannotCompileException {
@@ -1450,8 +1473,8 @@ class CtClassType extends CtClass {
     }
 
     /**
-     * @see javassist.CtClass#prune()
-     * @see javassist.CtClass#stopPruning(boolean)
+     * @see javassist.jennifer.CtClass#prune()
+     * @see javassist.jennifer.CtClass#stopPruning(boolean)
      */
     public void prune() {
         if (wasPruned)
